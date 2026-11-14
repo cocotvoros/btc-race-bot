@@ -5,6 +5,11 @@
 // bleeds. This bot trades rarely and only into washed-out moves:
 //
 //   Entry (all comparisons in exact integer arithmetic on raw closes):
+//     - the bot first watches 480 bars without trading: a capitulation is
+//       only readable against a full stretch of tape, and the falls in the
+//       opening hours of a window are still price discovery, not washouts
+//       (locally, entries taken before bar 480 turned the same signal
+//       negative — one extra losing trade in the early tape),
 //     - the close has fallen at least 1.2% over the last 120 bars
 //       (close * 1000 <= close[-120] * 988), and
 //     - the close has bounced at least +0.20% over the last 10 bars
@@ -29,6 +34,8 @@
 
 import { BPS, runBars, type BarsState, type OrderInput } from './vendor/makefun-bars.ts';
 
+/** Bars of tape watched before the first entry may fire. */
+const CONTEXT_BARS = 480;
 /** Bars of decline the entry looks back over. */
 const DROP_LOOKBACK = 120;
 /** The drop, in tenths of a percent kept: close <= close[-120] * 988/1000 is a fall of 1.2% or more. */
@@ -66,7 +73,7 @@ let wasHolding = false;
 /** The entry test on the closes seen so far. */
 function capitulationTurn(): boolean {
   const n = closes.length;
-  if (n <= DROP_LOOKBACK) return false;
+  if (n <= CONTEXT_BARS || n <= DROP_LOOKBACK) return false;
   const now = closes[n - 1];
   const dropped = now * RATIO_DEN <= closes[n - 1 - DROP_LOOKBACK] * DROP_KEEP_NUM;
   if (!dropped) return false;
